@@ -22,7 +22,7 @@ class AsyncExec(object):
         self.running = True
 
         while len(self.workers) < self.num_threads:
-            t = Thread(target=self.loop)
+            t = Thread(target=self.__loop)
             self.workers.append(t)
             t.start()
     
@@ -47,7 +47,8 @@ class AsyncExec(object):
             else:
                 raise exc_type, exc_inst, tb
         
-    def loop(self):
+    def __loop(self):
+        ''' internal function called from thread '''
         while not self.exception:
             try:
                 fun, params = self.pending_calls.get(block=self.running)
@@ -81,4 +82,4 @@ if __name__ == '__main__':
         exc(testfun, 0.5, 10, '+')
         exc(testfun, 1.5, 4, '-')
         exc(testfun, 1, 10, '=')
-    
+		
