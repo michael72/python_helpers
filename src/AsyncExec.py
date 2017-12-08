@@ -1,18 +1,14 @@
-'''
-Created on 07.12.2017
-
-@author: Michael
-'''
 from threading import Thread
-import time
 import sys
+import os
+
 try:
-    # python 2.x
+    # python 2.x (try-catch works better with import errors / warnings)
     from multiprocessing import Queue
     from Queue import Empty
-    def re_raise(*_):
+    def re_raise(*_): # dummy definition - to be replaced in exec
         pass
-    exec('''def re_raise(tp, value=None, tb=None):
+    exec('''def re_raise(tp, value, tb):
     raise tp, value, tb''')
 except ImportError:
     from queue import Queue, Empty  # python 3.x
@@ -44,14 +40,15 @@ class AsyncExec(object):
         # wait for workers to finish
         for worker in self.workers:
             worker.join()
-            
-        self.pending_calls.close()
+        
+        if sys.api_version < 3: 
+            self.pending_calls.close()
 
         if self.exception:
             # re-raise exception
             exc_type, exc_inst, tb = self.exception
-            if sys.api_version > (3,0):
-                raise exc_type.with_traceback(tb)
+            if sys.api_version >= 3:
+                raise exc_inst.with_traceback(tb)
             else:
                 re_raise(exc_type, exc_inst, tb)
         
@@ -77,8 +74,8 @@ class AsyncExec(object):
     def __exit__(self, *_):
         self.join()
             
-            
 if __name__ == '__main__':
+    import time
     
     def testfun(t, loops, msg):
         for _ in range(loops):
@@ -90,4 +87,3 @@ if __name__ == '__main__':
         exc(testfun, 0.5, 10, '+')
         exc(testfun, 1.5, 4, '-')
         exc(testfun, 1, 10, '=')
-		
