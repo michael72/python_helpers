@@ -3,11 +3,19 @@ Created on 07.12.2017
 
 @author: Michael
 '''
-from multiprocessing import Queue
 from threading import Thread
 import time
 import sys
-from Queue import Empty
+try:
+    # python 2.x
+    from multiprocessing import Queue
+    from Queue import Empty
+    def re_raise(*_):
+        pass
+    exec('''def re_raise(tp, value=None, tb=None):
+    raise tp, value, tb''')
+except ImportError:
+    from queue import Queue, Empty  # python 3.x
 
 class AsyncExec(object):
     '''
@@ -45,7 +53,7 @@ class AsyncExec(object):
             if sys.api_version > (3,0):
                 raise exc_type.with_traceback(tb)
             else:
-                raise exc_type, exc_inst, tb
+                re_raise(exc_type, exc_inst, tb)
         
     def __loop(self):
         ''' internal function called from thread '''
