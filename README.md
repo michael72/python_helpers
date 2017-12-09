@@ -11,7 +11,16 @@ AsyncExec using a local function works. In Python 2.7.x using `Pool` or `Queue` 
 with AsyncExec(2) as ex:
     ex(somefun, params)
     ex(some_other_fun, maybe_other_params)
-  
 # here the function calls are synchronized
 # (first) exception is forwarded
+
+# Alternative function calls
+exc = AsyncExec()
+# ...
+exc.add(oneCall)
+# ...
+exc.add(anotherCall)
+# ...
+exc.wait() # wait for function calls to finish
+
 ```
