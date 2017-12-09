@@ -1,7 +1,6 @@
-from threading import Thread
 import sys
+from threading import Thread
 from multiprocessing import Condition
-from sphinx.pycode.pgen2.token import ASYNC
 
 # python 2.x 
 if sys.version_info[0] < 3: 
@@ -31,6 +30,7 @@ class EntryLock(object):
             self.closed = True
             self.lock.notify_all()
 
+
 class AsyncExec(object):
     '''
     Executes function calls asynchronously starting immediately with the first call.
@@ -39,13 +39,14 @@ class AsyncExec(object):
     :param num_threads: number of threads to use in parallel
     :param add_results: either None or an empty list where the function call results are appended.
     '''
-    def __init__(self, num_threads = 8, add_results=None):
+    def __init__(self, num_threads = 8, add_results=False):
         self.pending_calls = []
         self.workers = []
         self.num_threads = num_threads
         self.exception = None
         self.running = True
         self.add_results = add_results
+        self.results = [] if add_results else None
         self.lock = EntryLock()
         
         while len(self.workers) < self.num_threads:
@@ -78,7 +79,8 @@ class AsyncExec(object):
                 raise exc_inst.with_traceback(tb)
             else:
                 re_raise(exc_type, exc_inst, tb)
-        
+        return self.results
+    
     def __loop(self):
         ''' internal function called from thread '''
         while not self.exception and not self.lock.closed:
@@ -94,9 +96,9 @@ class AsyncExec(object):
             if fun and not self.exception:
                 try:
                     result = fun(*params)
-                    if self.add_results != None:
+                    if self.add_results:
                         with self.lock:
-                            self.add_results.append(result)
+                            self.results.append(result)
                 except:
                     self.exception = sys.exc_info()
             
@@ -113,12 +115,26 @@ if __name__ == '__main__':
     import time
     
     def testOuter():
+        def fib(i):
+            if i <= 1:
+                return i
+            return fib(i-2) + fib(i-1)
+        
+        exc = AsyncExec(add_results = True)
+        
+        exc.add(fib, 10)
+        exc.add(fib, 1)
+        exc.add(fib, 33)
+        exc.add(fib, 22)
+        exc.join()
+        print(exc.results)
+
         def testfun(t, loops, msg):
             for _ in range(loops):
                 time.sleep(t)
                 sys.stdout.write(msg)
-            #raise BaseException("TEST " + msg)
-        if False:
+            raise BaseException("TEST " + msg)
+        if True:
             with AsyncExec(3) as exc:
                 exc(testfun, 0.5, 5, '*')
                 exc(testfun, 0.5, 10, '+')
@@ -127,18 +143,5 @@ if __name__ == '__main__':
                 exc(testfun, 0.1, 10, 'x')
             print("")
             
-        def fib(i):
-            if i <= 1:
-                return i
-            return fib(i-2) + fib(i-1)
-        
-        results = []
-        exc = AsyncExec(add_results = results)
-        exc.add(fib, 10)
-        exc.add(fib, 1)
-        exc.add(fib, 31)
-        exc.add(fib, 22)
-        exc.join()
-        print(results)
     
     testOuter()
