@@ -10,26 +10,6 @@ if sys.version_info[0] < 3:
     raise tp, value, tb''')
 
 
-class EntryLock(object):
-    ''' Helper class for locking - actually wraps a Condition object '''    
-    def __init__(self):
-        self.lock = Condition()
-        self.closed = False
-    def __enter__(self):
-        self.lock.acquire()
-    def __exit__(self, *_):
-        self.lock.release()
-    def wait(self):
-        assert(not self.closed) 
-        self.lock.wait()
-    def notify(self):
-        self.lock.notify()
-    def close(self):
-        ''' final closing operation - lock should not be used any more '''
-        with self:
-            self.closed = True
-            self.lock.notify_all()
-
 
 class AsyncExec(object):
     '''
@@ -47,21 +27,30 @@ class AsyncExec(object):
         self.running = True
         self.add_results = add_results
         self.results = [] if add_results else None
-        self.lock = EntryLock()
+        self.lock = create_close_condition()
         
         while len(self.workers) < self.num_threads:
             t = Thread(target=self.__loop)
+            t.daemon = True
             self.workers.append(t)
             t.start()
+    
+    def fun(self, fun_call):
+        return AsyncFun(fun_call, self)
     
     def add(self, fun, *params):
         if not self.running:
             raise BaseException("Wrong state - cannot add actions to already closing / closed AsyncExec")
         with self.lock:
-            self.pending_calls.append((fun, list(params)))
+            self.pending_calls.append((fun, params))
             self.lock.notify()
+        return self
 
     def join(self):
+        ''' Wait for the running threads to finish and join to main thread. 
+        :return: results of function calls - if add_results was set in init
+        :raises: re-raises any exception that was caught during the function call '''
+        assert(self.running) # join should be called once only
         self.running = False
         
         with self.lock:
@@ -100,7 +89,11 @@ class AsyncExec(object):
                         with self.lock:
                             self.results.append(result)
                 except:
-                    self.exception = sys.exc_info()
+                    if not self.exception:
+                        self.exception = sys.exc_info()
+                    with self.lock:
+                        self.pending_calls = []
+                        self.lock.close()
             
     def __call__(self, fun, *params):
         self.add(fun, *params)
@@ -111,6 +104,37 @@ class AsyncExec(object):
     def __exit__(self, *_):
         self.join()
             
+
+def create_close_condition():
+    ''' adds a close function and a closed property to the Condition function '''
+    lock = Condition()
+    lock.closed = False
+    def close():
+        with lock:
+            lock.closed = True
+            lock.notify_all()
+    lock.close = close
+    return lock
+
+
+class AsyncFun(object):
+    ''' Helper class to set one specific function in AsyncExec. '''
+    def __init__(self, fun, async_exec):
+        self.fun = fun
+        self.async_exec = async_exec
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        self.async_exec.__exit__(*args)
+    def __call__(self, *args):
+        return self.add(*args)
+    def add(self, *args):
+        self.async_exec.add(self.fun, *args)
+        return self
+    def join(self):
+        return self.async_exec.join()
+        
+
 if __name__ == '__main__':
     import time
     
@@ -120,8 +144,7 @@ if __name__ == '__main__':
                 return i
             return fib(i-2) + fib(i-1)
         
-        exc = AsyncExec(add_results = True)
-        
+        exc = AsyncExec(add_results = True)      
         exc.add(fib, 10)
         exc.add(fib, 1)
         exc.add(fib, 33)
@@ -133,14 +156,15 @@ if __name__ == '__main__':
             for _ in range(loops):
                 time.sleep(t)
                 sys.stdout.write(msg)
-            raise BaseException("TEST " + msg)
+                sys.stdout.flush()
+            #raise BaseException("TEST " + msg)
         if True:
-            with AsyncExec(3) as exc:
-                exc(testfun, 0.5, 5, '*')
-                exc(testfun, 0.5, 10, '+')
-                exc(testfun, 1.5, 4, '-')
-                exc(testfun, 1, 10, '=')
-                exc(testfun, 0.1, 10, 'x')
+            with AsyncExec(3).fun(testfun) as test_print:
+                test_print(0.5, 5, '*')
+                test_print(0.5, 10, '+')
+                test_print(1.5, 4, '-')
+                test_print(1, 10, '=')
+                test_print(0.1, 10, 'x')
             print("")
             
     
