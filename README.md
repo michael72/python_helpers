@@ -21,6 +21,6 @@ exc.add(oneCall)
 # ...
 exc.add(anotherCall)
 # ...
-exc.wait() # wait for function calls to finish
+exc.join() # wait for function calls to finish
 
 ```
