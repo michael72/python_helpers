@@ -1,6 +1,6 @@
 from threading import Thread
 import sys
-from multiprocessing import Lock, Condition
+from multiprocessing import Condition
 
 # python 2.x 
 if sys.version_info[0] < 3: 
@@ -39,7 +39,6 @@ class AsyncExec(object):
     def __init__(self, num_threads = 8):
         self.pending_calls = []
         self.workers = []
-        self.lock = Lock
         self.num_threads = num_threads
         self.exception = None
         self.running = True
