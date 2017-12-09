@@ -22,5 +22,6 @@ exc.add(oneCall)
 exc.add(anotherCall)
 # ...
 results = exc.join() # wait for function calls to finish
-print(results)
+print(results) 
+print(exc.results) # also works
 ```
