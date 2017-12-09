@@ -15,12 +15,12 @@ with AsyncExec(2) as ex:
 # (first) exception is forwarded
 
 # Alternative function calls
-exc = AsyncExec()
+exc = AsyncExec(append_results = true) # append function call results to a list
 # ...
 exc.add(oneCall)
 # ...
 exc.add(anotherCall)
 # ...
-exc.join() # wait for function calls to finish
-
+results = exc.join() # wait for function calls to finish
+print(results)
 ```
