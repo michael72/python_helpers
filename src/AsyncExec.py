@@ -1,17 +1,35 @@
 from threading import Thread
 import sys
-import os
+from multiprocessing import Lock, Condition
 
-try:
-    # python 2.x (try-catch works better with import errors / warnings)
-    from multiprocessing import Queue
-    from Queue import Empty
+# python 2.x 
+if sys.version_info[0] < 3: 
     def re_raise(*_): # dummy definition - to be replaced in exec
         pass
     exec('''def re_raise(tp, value, tb):
     raise tp, value, tb''')
-except ImportError:
-    from queue import Queue, Empty  # python 3.x
+
+
+class EntryLock(object):
+    ''' Helper class for locking - actually wraps a Condition object '''    
+    def __init__(self):
+        self.lock = Condition()
+        self.closed = False
+    def __enter__(self):
+        assert(not self.closed)
+        self.lock.acquire()
+    def __exit__(self, *_):
+        self.lock.release()
+    def wait(self):
+        assert(not self.closed)
+        self.lock.wait()
+    def notify(self):
+        self.lock.notify()
+    def close(self):
+        ''' final closing operation - lock shall not be used any more '''
+        with self:
+            self.closed = True
+            self.lock.notify_all()
 
 class AsyncExec(object):
     '''
@@ -19,12 +37,14 @@ class AsyncExec(object):
     If an exception occured the exception is re-raised in the join call. 
     '''
     def __init__(self, num_threads = 8):
-        self.pending_calls = Queue()
+        self.pending_calls = []
         self.workers = []
+        self.lock = Lock
         self.num_threads = num_threads
         self.exception = None
         self.running = True
-
+        self.lock = EntryLock()
+        
         while len(self.workers) < self.num_threads:
             t = Thread(target=self.__loop)
             self.workers.append(t)
@@ -33,37 +53,46 @@ class AsyncExec(object):
     def add(self, fun, *params):
         if not self.running:
             raise BaseException("Wrong state - cannot add actions to already closing / closed AsyncExec")
-        self.pending_calls.put((fun, list(params)))
+        with self.lock:
+            self.pending_calls.append((fun, list(params)))
+            self.lock.notify()
 
     def join(self):
         self.running = False
+        
+        with self.lock:
+            if (len(self.pending_calls) == 0):
+                self.lock.close()
+                
         # wait for workers to finish
         for worker in self.workers:
             worker.join()
-        
-        if sys.api_version < 3: 
-            self.pending_calls.close()
 
         if self.exception:
             # re-raise exception
             exc_type, exc_inst, tb = self.exception
-            if sys.api_version >= 3:
+            if sys.version_info[0] >= 3:
                 raise exc_inst.with_traceback(tb)
             else:
                 re_raise(exc_type, exc_inst, tb)
         
     def __loop(self):
         ''' internal function called from thread '''
-        while not self.exception:
-            try:
-                fun, params = self.pending_calls.get(block=self.running)
-            except Empty:
-                break
-            try:
-                if not self.exception:  
+        while not self.exception and not self.lock.closed:
+            fun = None
+            with self.lock:
+                if len(self.pending_calls) > 0:
+                    fun, params = self.pending_calls.pop()
+                elif not self.running:
+                    self.lock.close()
+                else:
+                    self.lock.wait()
+            
+            if fun and not self.exception:
+                try:
                     fun(*params)
-            except:
-                self.exception = sys.exc_info()
+                except:
+                    self.exception = sys.exc_info()
             
     def __call__(self, fun, *params):
         self.add(fun, *params)
@@ -77,13 +106,17 @@ class AsyncExec(object):
 if __name__ == '__main__':
     import time
     
-    def testfun(t, loops, msg):
-        for _ in range(loops):
-            time.sleep(t)
-            sys.stdout.write(msg)
-        raise BaseException("TEST " + msg)
-    with AsyncExec(3) as exc:
-        exc(testfun, 0.5, 5, '*')
-        exc(testfun, 0.5, 10, '+')
-        exc(testfun, 1.5, 4, '-')
-        exc(testfun, 1, 10, '=')
+    def testOuter():
+        def testfun(t, loops, msg):
+            for _ in range(loops):
+                time.sleep(t)
+                sys.stdout.write(msg)
+            #raise BaseException("TEST " + msg)
+        with AsyncExec(3) as exc:
+            exc(testfun, 0.5, 5, '*')
+            exc(testfun, 0.5, 10, '+')
+            exc(testfun, 1.5, 4, '-')
+            exc(testfun, 1, 10, '=')
+            exc(testfun, 0.1, 10, 'x')
+    
+    testOuter()
