@@ -8,7 +8,7 @@ AsyncExec using a local function works. In Python 2.7.x using `Pool` or `Queue` 
 > PicklingError: Can't pickle <type 'function'>
 
 ```python
-with AsyncExec as ex:
+with AsyncExec(2) as ex:
     ex(somefun, params)
     ex(some_other_fun, maybe_other_params)
   
