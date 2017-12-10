@@ -4,8 +4,10 @@ Library of python helpers - compatible with Python 2.7.x and 3.x
 ## AsyncExec ##
 Execute functions asynchronously in a defined number of threads with one synchronization point. Exceptions are forewarded to the caller.
 
-`AsyncExec` using a local function works. In Python 2.7.x using `Pool` or `Queue` with a local function would yield a 
+In Python 2.7.x using `Pool` or `Queue` with a local function would yield a 
 > PicklingError: Can't pickle <type 'function'>
+
+`AsyncExec` using a local function also works with Python 2.7.x. 
 
 ```python
 with AsyncExec(2) as ex:
