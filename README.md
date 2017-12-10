@@ -22,21 +22,19 @@ exc.add(oneCall)
 exc.add(anotherCall)
 # ...
 results = exc.join() # wait for function calls to finish
-print(results) 
+print(results)     # results are in the same order as were the added function calls
 print(exc.results) # also works
 
 # Shortcut for a single function with different parameters
-asyncfun = Async().fun(some_fun)
-asyncfun(params)
-asyncfun(other_params)
+with Async().fun(some_fun) as asyncfun:
+    asyncfun(params)
+    asyncfun(other_params)
 
 # Using mapping functionality on a single function
 def fib(i):
-    if i <= 1:
-        return i
-    return fib(i-2) + fib(i-1)
-          
-res = dict(AsyncExec().fun(fib).map(range(25)))
+    return i if i <= 1 else fib(i-2) + fib(i-1)
+    
+res = dict(AsyncExec().fun(fib).map(range(25))) # map returns a list of tuples (param, result)
 print(res) # prints {0: 0, ..., 23: 28657, 24: 46368}
 
 
