@@ -24,4 +24,20 @@ exc.add(anotherCall)
 results = exc.join() # wait for function calls to finish
 print(results) 
 print(exc.results) # also works
+
+# Shortcut for a single function with different parameters
+asyncfun = Async().fun(some_fun)
+asyncfun(params)
+asyncfun(other_params)
+
+# Using mapping functionality on a single function
+def fib(i):
+    if i <= 1:
+        return i
+    return fib(i-2) + fib(i-1)
+          
+res = dict(AsyncExec().fun(fib).map(range(25)))
+print(res) # prints {0: 0, ..., 23: 28657, 24: 46368}
+
+
 ```
