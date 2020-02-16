@@ -7,28 +7,32 @@ import os
 import stat
 import sys
 import traceback
+import ExecHelper
+from typing import List
 
-from ExecHelper import readLines
 
-
-def getLines(filename, strip=True):
+def getLines(filename: str, strip: bool=True):
     with open(filename, 'r') as f:
         for line in f:
             yield line.strip() if strip else line
+
        
-def isWritable(filename):
+def isWritable(filename: str) -> bool:
     return os.path.exists(filename) and (os.stat(filename).st_mode & stat.S_IWRITE) == stat.S_IWRITE
 
-def makeWritable(filename):
+
+def makeWritable(filename: str) -> None:
     if os.path.exists(filename) and not isWritable(filename):
         os.chmod(filename, stat.S_IWRITE)    
 
-def forceRemove(filename):
+
+def forceRemove(filename: str) -> None:
     if os.path.exists(filename):
         makeWritable(filename)
         os.remove(filename)
+
             
-def getCommonDir(fileNames):
+def getCommonDir(fileNames: List[str]) -> str:
     ''' Gets the common parent directory of given file paths '''
     commonDir = None 
     for f in fileNames:
@@ -38,12 +42,12 @@ def getCommonDir(fileNames):
         else:
             commonDirParts = commonDir.split(os.path.sep)
             # compare all directory elements (between seperators)
-            for idx,(commonDirPart,currentDirPart) in enumerate(zip(commonDirParts,curDir.split(os.path.sep))):
+            for idx, (commonDirPart, currentDirPart) in enumerate(zip(commonDirParts, curDir.split(os.path.sep))):
                 if commonDirPart != currentDirPart:
                     commonDir = os.path.sep.join(commonDirParts[:idx])
                     break
     return commonDir
-                
+
 
 class BackupFile:
     ''' Easy handling for changing files:
@@ -57,7 +61,8 @@ class BackupFile:
     As a result the original file should be completely available
     or - in rare cases - it is not available, but the "~~"-file is present. 
     '''
-    def __init__(self, origFile, openArgs = 'wb'):
+
+    def __init__(self, origFile, openArgs='wb'):
         self.origFile = origFile
         self.backupFile = origFile + '~'
         self.backBackup = self.backupFile + '~' 
@@ -137,7 +142,7 @@ class BackupFile:
     @staticmethod
     def workOnContentLines(filename, fun):
         with BackupFile(filename) as bk:
-            linesIn = list(readLines(filename))
+            linesIn = list(ExecHelper.readLines(filename))
             changed, linesOut = fun(linesIn)
             if changed:
                 for line in linesOut:
