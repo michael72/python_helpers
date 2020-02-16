@@ -10,9 +10,10 @@ import subprocess
 import sys
 from tempfile import mkstemp
 from threading import Thread
+import FileHelper
 
 
-def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
+def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None, redirect=False):
     ''' Read the (stdout) output of a shell command line by line. 
     The code also handles the "GeneratorExit" event - i.e. when the file is read line by line, the searched lines are found and the loop is exited with break.
     
@@ -36,11 +37,10 @@ def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
         cmd = str(cmd).strip().split()
 
     isWindows = sys.platform.startswith("win")
-    if isWindows:        
-        si = subprocess.STARTUPINFO()
-        # prevent cmd window to be shown 
-        si.dwFlags = subprocess.CREATE_NEW_CONSOLE | subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = subprocess.SW_HIDE
+    si = subprocess.STARTUPINFO()
+    # prevent cmd window to be shown 
+    si.dwFlags = subprocess.CREATE_NEW_CONSOLE | subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = subprocess.SW_HIDE
 
     def oswrite(fh, txt):
         os.write(fh, txt.encode())
@@ -50,7 +50,13 @@ def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
         callYield = False
         stderr = subprocess.PIPE
     tmpfile = None
-        
+    tmpfile_redirect = None
+    if redirect:
+        fh2, tmpfile_redirect = mkstemp(suffix=".txt")
+        os.close(fh2)
+        cmd.append('>')
+        cmd.append(tmpfile_redirect)
+    
     if env != None or (len(cmd) > 2 and '>' in cmd[-2] and '<' not in cmd[-2]):
         if isWindows:
             # piping or setting the env does not really work
@@ -70,7 +76,7 @@ def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
             if cmd[0] == "cmd":
                 cmd = cmd[2:]
             # support for piping ('>') is in this call
-            oswrite(fh, " ".join(cmd) + "\r\n")
+            oswrite(fh, " ".join(map(lambda x: '"' + x + '"' if " " in x else x, cmd)) + "\r\n")
             
             oswrite(fh, "exit\r\n")
             cmd = ['cmd', '/c', tmpfile]
@@ -79,7 +85,7 @@ def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
             raise BaseException("Currently only implemented for Windows / Batch")
 
     try:
-        proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr, shell=shell, env=env, startupinfo=si)
+        proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=stderr, shell=shell, env=env, startupinfo=si, text=True)
     except WindowsError as ex:
         sys.stderr.write(" ".join(cmd) + "\n")
         raise ex
@@ -135,7 +141,7 @@ def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
         line = getLine()  # call either stdout.readline or the parallel version above
         if line:
             try:
-                yield line.decode('utf-8', 'ignore').rstrip()  # utf-8 is converted to a usual string
+                yield line.rstrip()  # utf-8 is converted to a usual string
             except GeneratorExit:
                 # outer loop has finished: clean up
                 try:
@@ -151,5 +157,12 @@ def readLines(cmd, cwd=os.getcwd(), stderr=sys.stderr, shell=False, env=None):
                 break
             except:
                 pass
+
     if tmpfile:
         os.remove(tmpfile)
+        if tmpfile_redirect:
+            try:
+                for line in FileHelper.getLines(tmpfile_redirect):
+                    yield line
+            finally:
+                os.remove(tmpfile_redirect)
