@@ -15,7 +15,7 @@ class ReMatcher(object):
     You can use:
     myPattern = ReMatcher('my regex')
     ...    
-    if myPattern('bla'):
+    if myPattern.match('bla'):
         some, content = myPattern.groups()
     
     or even perform an (exhaustive) search:
@@ -34,7 +34,7 @@ class ReMatcher(object):
         return self.regex.findall(chk)
     
     def __call__(self, chk):
-        ''' shortcut for both match and findall '''
+        ''' shortcut for findall '''
         return self.regex.findall(chk)
 
     def group(self,i):
